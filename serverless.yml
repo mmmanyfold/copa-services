@@ -1,0 +1,16 @@
+service: copa-services
+
+provider:
+  name: aws
+  runtime: nodejs4.3
+
+functions:
+  echo:
+    cljs: copa-services.core/echo
+    events:
+      - http:
+          path: echo
+          method: post
+
+plugins:
+  - serverless-cljs-plugin
