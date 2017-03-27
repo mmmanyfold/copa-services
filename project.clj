@@ -5,7 +5,9 @@
   :plugins [[lein-npm                    "0.6.2"]
             [io.nervous/lein-cljs-lambda "0.6.5"]]
   :npm {:dependencies [[serverless-cljs-plugin "0.1.2"]
-                       [twilio "2.11.1"]]}
+                       [source-map-support "0.4.0"]
+                       [twilio "2.11.1"]
+                       [request "2.81.0"]]}
   :cljs-lambda {:compiler
                 {:inputs  ["src"]
                  :options {:output-to     "target/copa-services/copa_services.js"

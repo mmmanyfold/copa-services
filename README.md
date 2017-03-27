@@ -1,4 +1,4 @@
-# copa-services
+# copa-λ-services
 
 ### Deploy
 
@@ -18,13 +18,13 @@ $ serverless deploy function -f echo
 $ curl -X POST <url> -H 'Content-Type: application/json' -d '{"body": "Hi"}'
 ```
 
-### logs
+### Logs
 
 ```
 serverless logs -f echo -t
 ```
 
-### remove all functions from aws account
+### Remove all functions from aws account
 
 ```
 serverless remove
