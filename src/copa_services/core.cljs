@@ -31,7 +31,7 @@
 
               (-> (http (clj->js opts-0))
                   (.then
-                    (fn [err res user]
+                    (fn [user]
                       ;; if no data then first time user
                       ;; create user record in firebase db
                       (if-not user
@@ -47,4 +47,5 @@
                                                      (.message (:step-0 outgoing-messages))
                                                      (.toString))}))))
                         ;; if step-0 is yes, then set lang preference
-                        (let [])))))))
+                        (do
+                          (js/console.log user))))))))
