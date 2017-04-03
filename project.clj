@@ -7,7 +7,8 @@
   :npm {:dependencies [[serverless-cljs-plugin "0.1.2"]
                        [source-map-support "0.4.0"]
                        [twilio "2.11.1"]
-                       [request "2.81.0"]]}
+                       [request "2.81.0"]
+                       [request-promise "4.2.0"]]}
   :cljs-lambda {:compiler
                 {:inputs  ["src"]
                  :options {:output-to     "target/copa-services/copa_services.js"
