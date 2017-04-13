@@ -1,15 +1,18 @@
 (ns copa-services.core
-  (:require [cljs-lambda.macros :refer-macros [defgateway]]
-            [cljs.core.async :as async]
-            [cljs.nodejs :as nodejs])
-  (:require-macros [cljs.core.async.macros :refer [go]]))
+  (:require-macros [cljs.core.async.macros :refer [go]])
+  (:require [cljs.nodejs :as nodejs]
+            [cljs-lambda.macros :refer-macros [defgateway]]
+            [cljs-http.client :as http]
+            [cljs.core.async :refer [<!]]))
 
 (def query-string (nodejs/require "querystring"))
 
-(def http (nodejs/require "request-promise"))
+(set! js/XMLHttpRequest (nodejs/require "xhr2")) ;; XMLHttpRequest not present in node,
+                                                 ;; therefore we need to load this xhr emulator
 
-(defonce copa-firebase-endpoint
-         "https://copa-services-storage.firebaseio.com")
+(def twilio (nodejs/require "twilio"))
+
+(defonce copa-firebase-endpoint "https://copa-services-storage.firebaseio.com")
 
 (defonce outgoing-messages
          {:step-0 "Welcome to COPA's text alerts and news! To subscribe to receive important updates reply \"yes.\" Do not respond if you do not want to be added at this time.\n\nBienvenid@ a los alertos de texto de COPA! Para inscribirse a recibir información importante, responda \"yes.\" No necesita responder si no quiere recibir mensajes por el momento."
@@ -26,54 +29,30 @@
                 (.message msg)
                 (.toString))})
 
-(defn get-user [url]
-  (http (clj->js {:url url :method "GET" :json true})))
-
-
-(defn update-user-record
-  "creates or updates user record in firebase"
-  [url body]
-  (http (clj->js {:url url :method "PUT" :json true :body body})))
-
+(defn make-url [from] (str copa-firebase-endpoint "/incoming/" from ".json"))
 
 ;; TODO: upcase ppl's name, grown up case
 ;; no yelling!
 
 (defgateway echo [{:keys [body] :as input} ctx]
-            (let [twilio (nodejs/require "twilio")
-                  twiml (twilio.TwimlResponse.)
-                  parsed-query-str (query-string.parse body)
-                  sms-date (aget parsed-query-str "DateSent")
-                  sms-body (aget parsed-query-str "Body")
-                  sms-from (re-find #"\d+" (aget parsed-query-str "From"))
-                  url (str copa-firebase-endpoint "/incoming/" sms-from ".json")
+            (let [twiml (twilio.TwimlResponse.)
+                  query-string (query-string.parse body)
+                  sms-date (aget query-string "DateSent")
+                  sms-body (aget query-string "Body")
+                  sms-from (re-find #"\d+" (aget query-string "From"))
+                  url (make-url sms-from)
                   body (clojure.string/upper-case sms-body)]
 
-              (js/console.log sms-from)
-              (js/console.log body)
 
-              (-> (get-user url)
-                  (.then (fn [user]
-                          (js/console.log user)
-                          (if (nil? (js->clj user))
-                            ;; firabase has no record
-                            (if (= body "YES")
-                              (-> (update-user-record url {:created sms-date})
-                                  (.then #(make-sms twiml (:step-1 outgoing-messages))))
-                              (make-sms twiml (:step-0 outgoing-messages)))
-                            ;; firebase has record
-                            (let [_user (clj->js user)]
+              (go (let [response (<! (http/get url))
+                        user (:body response)]
 
-                              (if-let [lang (:lang _user)]
-                                ;; store name
-                                (-> (update-user-record url (assoc _user :name body))
-                                    (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
-                                ;; store lang
-                                (let [lang (cond
-                                            (= body "1") "en-US"
-                                            (= body "2") "es-US"
-                                            :else "bail")]
-                                  (if-not (= lang "bail")
-                                    (-> (update-user-record url (assoc _user :lang lang))
-                                        (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
-                                    (make-sms twiml (:step-1 outgoing-messages))))))))))))
+                    (js/console.log (clj->js response))
+                    (js/console.log (type user))
+
+                    (if (nil? (js->clj user))
+                      ;; @eemishi this works^ for checking null
+                      ;; now its just a matter of porting the
+                      ;; rest of the branching logic to
+                      ;; this inner expression
+                      (js/console.log "got here 1"))))))
