@@ -33,7 +33,8 @@
 (defn update-user-record
   "creates or updates user record in firebase"
   [url body]
-  (http (clj->js {:url url :method "PUT" :json true :body body})))
+  (let [opts {:url url :method "PUT" :json true}]
+    (http (clj->js (assoc opts :body body)))))
 
 
 ;; TODO: upcase ppl's name, grown up case
@@ -43,30 +44,25 @@
             (let [twilio (nodejs/require "twilio")
                   twiml (twilio.TwimlResponse.)
                   parsed-query-str (query-string.parse body)
-                  sms-date (aget parsed-query-str "DateSent")
                   sms-body (aget parsed-query-str "Body")
                   sms-from (re-find #"\d+" (aget parsed-query-str "From"))
                   url (str copa-firebase-endpoint "/incoming/" sms-from ".json")
                   body (clojure.string/upper-case sms-body)]
 
-              (js/console.log sms-from)
-              (js/console.log body)
-
               (-> (get-user url)
                   (.then (fn [user]
-                          (js/console.log user)
-                          (if (nil? (js->clj user))
+                          (if (nil? user)
                             ;; firabase has no record
                             (if (= body "YES")
-                              (-> (update-user-record url {:created sms-date})
+                              (-> (update-user-record url {:created (.now js/Date)})
                                   (.then #(make-sms twiml (:step-1 outgoing-messages))))
                               (make-sms twiml (:step-0 outgoing-messages)))
                             ;; firebase has record
-                            (let [_user (clj->js user)]
+                            (let [user-map (js->clj user :keywordize-keys true)]
 
-                              (if-let [lang (:lang _user)]
+                              (if-let [lang (:lang user-map)]
                                 ;; store name
-                                (-> (update-user-record url (assoc _user :name body))
+                                (-> (update-user-record url (assoc user-map :name body))
                                     (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
                                 ;; store lang
                                 (let [lang (cond
@@ -74,6 +70,6 @@
                                             (= body "2") "es-US"
                                             :else "bail")]
                                   (if-not (= lang "bail")
-                                    (-> (update-user-record url (assoc _user :lang lang))
+                                    (-> (update-user-record url (assoc user-map :lang lang))
                                         (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
                                     (make-sms twiml (:step-1 outgoing-messages))))))))))))
