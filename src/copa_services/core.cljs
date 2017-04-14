@@ -58,18 +58,19 @@
                                   (.then #(make-sms twiml (:step-1 outgoing-messages))))
                               (make-sms twiml (:step-0 outgoing-messages)))
                             ;; firebase has record
-                            (let [user-map (js->clj user :keywordize-keys true)]
-
-                              (if-let [lang (:lang user-map)]
-                                ;; store name
-                                (-> (update-user-record url (assoc user-map :name body))
-                                    (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
-                                ;; store lang
-                                (let [lang (cond
-                                            (= body "1") "en-US"
-                                            (= body "2") "es-US"
-                                            :else "bail")]
-                                  (if-not (= lang "bail")
-                                    (-> (update-user-record url (assoc user-map :lang lang))
-                                        (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
-                                    (make-sms twiml (:step-1 outgoing-messages))))))))))))
+                            (let [user-map (js->clj user :keywordize-keys true)
+                                  user-props ((comp set keys) user-map)]
+                              (when-not (= user-props #{:created :name :lang})
+                                (if-let [lang (:lang user-map)]
+                                  ;; store name
+                                  (-> (update-user-record url (assoc user-map :name body))
+                                      (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
+                                  ;; store lang
+                                  (let [lang (cond
+                                              (= body "1") "en-US"
+                                              (= body "2") "es-US"
+                                              :else "bail")]
+                                    (if-not (= lang "bail")
+                                      (-> (update-user-record url (assoc user-map :lang lang))
+                                          (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
+                                      (make-sms twiml (:step-1 outgoing-messages)))))))))))))
