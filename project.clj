@@ -10,7 +10,9 @@
                        [source-map-support "0.4.0"]
                        [twilio "2.11.1"]
                        [request "2.81.0"]
-                       [request-promise "4.2.0"]]}
+                       [request-promise "4.2.0"]
+                       [json2csv "3.7.3"]
+                       [mailgun-js "0.10.1"]]}
   :cljs-lambda {:compiler
                 {:inputs  ["src"]
                  :options {:output-to     "target/copa-services/copa_services.js"

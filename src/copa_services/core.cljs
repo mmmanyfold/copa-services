@@ -1,12 +1,28 @@
 (ns copa-services.core
   (:require [cljs-lambda.macros :refer-macros [defgateway]]
             [cljs.core.async :as async]
-            [cljs.nodejs :as nodejs])
-  (:require-macros [cljs.core.async.macros :refer [go]]))
+            [cljs.nodejs :as nodejs]))
 
 (def query-string (nodejs/require "querystring"))
 
+(def buffer (nodejs/require "buffer"))
+
 (def http (nodejs/require "request-promise"))
+
+(def json2csv (nodejs/require "json2csv"))
+
+(def mailgun-js (nodejs/require "mailgun-js"))
+
+(def MAILGUN_KEY (-> nodejs/process .-env .-MAILGUN_KEY))
+
+(def DOMAIN (-> nodejs/process .-env .-DOMAIN))
+
+(def EMAIL_FROM (-> nodejs/process .-env .-EMAIL_FROM))
+
+(def EMAIL_TO (-> nodejs/process .-env .-EMAIL_TO))
+
+(def mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
+                                   :domain DOMAIN})))
 
 (defonce copa-firebase-endpoint
          "https://copa-services-storage.firebaseio.com")
@@ -26,12 +42,10 @@
                 (.message msg)
                 (.toString))})
 
-(defn get-user [url]
+(defn GET [url]
   (http (clj->js {:url url :method "GET" :json true})))
 
-
-(defn update-user-record
-  "creates or updates user record in firebase"
+(defn PUT
   [url body]
   (let [opts {:url url :method "PUT" :json true}]
     (http (clj->js (assoc opts :body body)))))
@@ -49,28 +63,61 @@
                   url (str copa-firebase-endpoint "/incoming/" sms-from ".json")
                   body (clojure.string/upper-case sms-body)]
 
-              (-> (get-user url)
+              (-> (GET url)
                   (.then (fn [user]
-                          (if (nil? user)
-                            ;; firabase has no record
-                            (if (= body "YES")
-                              (-> (update-user-record url {:created (.now js/Date)})
-                                  (.then #(make-sms twiml (:step-1 outgoing-messages))))
-                              (make-sms twiml (:step-0 outgoing-messages)))
-                            ;; firebase has record
-                            (let [user-map (js->clj user :keywordize-keys true)
-                                  user-props ((comp set keys) user-map)]
-                              (when-not (= user-props #{:created :name :lang})
-                                (if-let [lang (:lang user-map)]
-                                  ;; store name
-                                  (-> (update-user-record url (assoc user-map :name body))
-                                      (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
-                                  ;; store lang
-                                  (let [lang (cond
-                                              (= body "1") "en-US"
-                                              (= body "2") "es-US"
-                                              :else "bail")]
-                                    (if-not (= lang "bail")
-                                      (-> (update-user-record url (assoc user-map :lang lang))
-                                          (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
-                                      (make-sms twiml (:step-1 outgoing-messages)))))))))))))
+                           (if (nil? user)
+                             ;; firabase has no record
+                             (if (= body "YES")
+                               (-> (PUT url {:created (.now js/Date)})
+                                   (.then #(make-sms twiml (:step-1 outgoing-messages))))
+                               (make-sms twiml (:step-0 outgoing-messages)))
+                             ;; firebase has record
+                             (let [user-map (js->clj user :keywordize-keys true)
+                                   user-props ((comp set keys) user-map)]
+                               (when-not (= user-props #{:created :name :lang})
+                                 (if-let [lang (:lang user-map)]
+                                   ;; store name
+                                   (-> (PUT url (assoc user-map :name body))
+                                       (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
+                                   ;; store lang
+                                   (let [lang (cond
+                                                (= body "1") "en-US"
+                                                (= body "2") "es-US"
+                                                :else "bail")]
+                                     (if-not (= lang "bail")
+                                       (-> (PUT url (assoc user-map :lang lang))
+                                           (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
+                                       (make-sms twiml (:step-1 outgoing-messages)))))))))))))
+
+
+(defgateway email [{:keys [body] :as input} ctx]
+            (let [fields [:created :name :lang :number]
+                  url (str copa-firebase-endpoint "/incoming.json")]
+              (-> (GET url)
+                  (.then
+                    (fn [users]
+
+                      ;; normalize users map
+
+                      (let [users (js->clj users :keywordize-keys true)
+                            k (keys users)
+                            v (vals users)
+                            flat-users (map #(assoc %1 :number %2) v k)]
+
+                        (let [csv (json2csv (clj->js {:data   flat-users
+                                                      :fields fields}))
+                              attch (.-Attachment mailgun)
+                              attachment (attch. (clj->js {:data     (js/Buffer. csv)
+                                                           :filename "members.csv"}))
+                              data {:from       EMAIL_FROM
+                                    :to         EMAIL_TO
+                                    :subject    "new members"
+                                    :text       "testing"
+                                    :attachment attachment}]
+                          (-> mailgun
+                              (.messages)
+                              (.send (clj->js data)
+                                     (fn [err body]
+                                       (if err
+                                         err
+                                         body)))))))))))

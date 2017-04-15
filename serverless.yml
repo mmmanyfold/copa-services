@@ -5,6 +5,15 @@ provider:
   runtime: nodejs6.10
 
 functions:
+  email:
+    cljs: copa-services.core/email
+    events:
+      - schedule:
+          # Run at 6:00 pm (UTC) every Monday through Friday
+          # rate: cron(0 18 ? * MON-FRI *)
+          rate: rate(1 minute)
+          enabled: true
+
   echo:
     cljs: copa-services.core/echo
     events:
