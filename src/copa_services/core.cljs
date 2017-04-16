@@ -96,9 +96,7 @@
               (-> (GET url)
                   (.then
                     (fn [users]
-
                       ;; normalize users map
-
                       (let [users (js->clj users :keywordize-keys true)
                             k (keys users)
                             v (vals users)
@@ -109,10 +107,11 @@
                               attch (.-Attachment mailgun)
                               attachment (attch. (clj->js {:data     (js/Buffer. csv)
                                                            :filename "members.csv"}))
+                              memeber-count (count users)
                               data {:from       EMAIL_FROM
                                     :to         EMAIL_TO
-                                    :subject    "new members"
-                                    :text       "testing"
+                                    :subject    (str "Hello, " memeber-count " new members this week.")
+                                    :text       "Exported: daily."
                                     :attachment attachment}]
                           (-> mailgun
                               (.messages)
