@@ -11,7 +11,7 @@ functions:
       - schedule:
           # Run at 6:00 pm (UTC) every Monday through Friday
           # rate: cron(0 18 ? * MON-FRI *)
-          description: 'export members, emails csv, moves /incoming into archieved'
+          description: 'export members, emails csv, moves /incoming into archived'
           rate: rate(24 hours)
           enabled: true
 
