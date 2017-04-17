@@ -51,7 +51,7 @@
     (http (clj->js (assoc opts :body body)))))
 
 ;; define a constant set of user properties
-(defonce USER-PROPS #{:created :name :lang :archied})
+(defonce USER-PROPS #{:created :name :lang :archived})
 
 ;; TODO: upcase ppl's name, grown up case
 ;; no yelling!
@@ -73,7 +73,7 @@
                                (-> (PUT url {:archived false
                                              :created  (.now js/Date)})
                                    (.then #(make-sms twiml (:step-1 outgoing-messages))))
-                               (make-sms twiml (:step-0 outgoing-messages)))
+                               (make-sms twiml(:step-0 outgoing-messages)))
                              ;; firebase has record
                              (let [user-map (js->clj user :keywordize-keys true)
                                    user-props ((comp set keys) user-map)]
@@ -92,17 +92,16 @@
                                            (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
                                        (make-sms twiml (:step-1 outgoing-messages)))))))))))))
 
-(defn update-archieve-flag [user-records filtered]
+(defn update-archived-flag [user-records filtered]
   (let [records-to-update (map :number filtered)
         url (str copa-firebase-endpoint "/incoming.json")
         clj->users (js->clj user-records :keywordize-keys true)
         final-records-update
         (->> (map (fn [[k v]]
                    (if (some #(= k %) records-to-update)
-                     (hash-map k (update v :archieved (constantly true)))
+                     (hash-map k (update v :archived (constantly true)))
                      (hash-map k v))) clj->users)
             (into {}))]
-    (js/console.log (clj->js final-records-update))
     (-> (PUT url final-records-update)
         (.then (fn [res] (js/console.log res))))))
 
@@ -118,13 +117,13 @@
                             k (keys users)
                             v (vals users)
                             flat-users (map #(assoc %1 :number %2) v k)
-                            filter-archieved (filter #(not (% :archieved)) flat-users)]
-                        (let [csv (json2csv (clj->js {:data   filter-archieved
+                            filter-archived (filter #(not (% :archived)) flat-users)]
+                        (let [csv (json2csv (clj->js {:data   filter-archived
                                                       :fields fields}))
                               attch (.-Attachment mailgun)
                               attachment (attch. (clj->js {:data     (js/Buffer. csv)
                                                            :filename "members.csv"}))
-                              new-member-count (count filter-archieved)
+                              new-member-count (count filter-archived)
                               data {:from       EMAIL_FROM
                                     :to         EMAIL_TO
                                     :subject    (str "Hello, " new-member-count " new members this week.")
@@ -136,7 +135,6 @@
                                 (.send (clj->js data)
                                        (fn [err body]
                                          (if-not err
-                                           ;; update user records / archieve flag
-                                           (update-archieve-flag json-user-records filter-archieved)
+                                           (update-archived-flag json-user-records filter-archived)
                                            (js/console.log err)))))
-                            (js/console.log "Not new members this week.")))))))))
+                            (js/console.log "No new members this week.")))))))))
