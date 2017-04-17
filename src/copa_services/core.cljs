@@ -73,7 +73,7 @@
                                (-> (PUT url {:archived false
                                              :created  (.now js/Date)})
                                    (.then #(make-sms twiml (:step-1 outgoing-messages))))
-                               (make-sms twiml(:step-0 outgoing-messages)))
+                               (make-sms twiml (:step-0 outgoing-messages)))
                              ;; firebase has record
                              (let [user-map (js->clj user :keywordize-keys true)
                                    user-props ((comp set keys) user-map)]
@@ -98,12 +98,12 @@
         clj->users (js->clj user-records :keywordize-keys true)
         final-records-update
         (->> (map (fn [[k v]]
-                   (if (some #(= k %) records-to-update)
-                     (hash-map k (update v :archived (constantly true)))
-                     (hash-map k v))) clj->users)
-            (into {}))]
+                    (if (some #(= k %) records-to-update)
+                      (hash-map k (update v :archived (constantly true)))
+                      (hash-map k v))) clj->users)
+             (into {}))]
     (-> (PUT url final-records-update)
-        (.then (fn [res] (js/console.log res))))))
+        (.then #(println "User records updated.")))))
 
 
 (defgateway email [{:keys [body] :as input} ctx]
@@ -126,15 +126,13 @@
                               new-member-count (count filter-archived)
                               data {:from       EMAIL_FROM
                                     :to         EMAIL_TO
-                                    :subject    (str "Hello, " new-member-count " new members this week.")
+                                    :subject    (str "Hello, " new-member-count " new members today.")
                                     :text       "Exported: daily."
                                     :attachment attachment}]
-                          (if (>= new-member-count 1)
+                          (when (>= new-member-count 1)
                             (-> mailgun
                                 (.messages)
                                 (.send (clj->js data)
                                        (fn [err body]
                                          (if-not err
-                                           (update-archived-flag json-user-records filter-archived)
-                                           (js/console.log err)))))
-                            (js/console.log "No new members this week.")))))))))
+                                           (update-archived-flag json-user-records filter-archived)))))))))))))
