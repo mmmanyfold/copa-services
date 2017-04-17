@@ -129,7 +129,7 @@
                                     :subject    (str "Hello, " new-member-count " new members this week.")
                                     :text       "Exported: daily."
                                     :attachment attachment}]
-                          (if (>= 1 new-member-count)
+                          (if (>= new-member-count 1)
                             (-> mailgun
                                 (.messages)
                                 (.send (clj->js data)
