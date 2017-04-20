@@ -21,11 +21,7 @@
 
 (def EMAIL_TO (-> nodejs/process .-env .-EMAIL_TO))
 
-(def mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
-                                   :domain DOMAIN})))
-
-(defonce copa-firebase-endpoint
-         "https://copa-services-storage.firebaseio.com")
+(defonce copa-firebase-endpoint "https://copa-services-storage.firebaseio.com")
 
 (defonce outgoing-messages
          {:step-0 "Welcome to COPA's text alerts and news! To subscribe to receive important updates reply \"yes.\" Do not respond if you do not want to be added at this time.\n\nBienvenid@ a los alertos de texto de COPA! Para inscribirse a recibir información importante, responda \"yes.\" No necesita responder si no quiere recibir mensajes por el momento."
@@ -108,7 +104,9 @@
 
 (defgateway email [{:keys [body] :as input} ctx]
             (let [fields [:created :name :lang :number]
-                  url (str copa-firebase-endpoint "/incoming.json")]
+                  url (str copa-firebase-endpoint "/incoming.json")
+                  mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
+                                                :domain DOMAIN}))]
               (-> (GET url)
                   (.then
                     (fn [json-user-records]
@@ -129,10 +127,11 @@
                                     :subject    (str "Hello, " new-member-count " new members today.")
                                     :text       "Exported: daily."
                                     :attachment attachment}]
-                          (when (>= new-member-count 1)
+                          (if (>= new-member-count 1)
                             (-> mailgun
                                 (.messages)
                                 (.send (clj->js data)
                                        (fn [err body]
-                                         (if-not err
-                                           (update-archived-flag json-user-records filter-archived)))))))))))))
+                                         (when-not err
+                                           (update-archived-flag json-user-records filter-archived)))))
+                            (println "No new members today.")))))))))
