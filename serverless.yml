@@ -10,9 +10,8 @@ functions:
     events:
       - schedule:
           # Run at 6:00 pm (UTC) every Monday through Friday
-          # rate: cron(0 18 ? * MON-FRI *)
-          description: 'export members, emails csv, moves /incoming into archived'
-          rate: rate(24 hours)
+          description: 'Exports new members by email csv, flips users archive flag after'
+          rate: cron(0 18 ? * MON-FRI *)
           enabled: true
 
   echo:
