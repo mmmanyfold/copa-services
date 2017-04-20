@@ -26,10 +26,10 @@
 (defonce outgoing-messages
          {:step-0 "Welcome to COPA's text alerts and news! To subscribe to receive important updates reply \"yes.\" Do not respond if you do not want to be added at this time.\n\nBienvenid@ a los alertos de texto de COPA! Para inscribirse a recibir información importante, responda \"yes.\" No necesita responder si no quiere recibir mensajes por el momento."
           :step-1 "Thank you for signing up to receive COPA’s text messages! To provide you the correct information, please provide your preferred language. Reply “1” for English or “2” for Spanish. \n\n¡Gracias por inscribirse a los mensajes de COPA! Para darle la información correcta, por favor designe su idioma preferido. Responda “1” para inglés o “2” para español."
-          :step-2 {:es-US "¡Gracias! Su idioma preferido es español. Y para comunicarnos mejor, responda con su nombre completo."
-                   :en-US "Thank you! Your preferred language is English. To best communicate with you, please respond with your full name."}
-          :step-3 {:es-US "¡Gracias! ¡Este pendiente de la información de COPA!"
-                   :en-US "Thank you! Stay tuned for updates from COPA!"}})
+          :step-2 {:spanish "¡Gracias! Su idioma preferido es español. Y para comunicarnos mejor, responda con su nombre completo."
+                   :english "Thank you! Your preferred language is English. To best communicate with you, please respond with your full name."}
+          :step-3 {:spanish "¡Gracias! ¡Este pendiente de la información de COPA!"
+                   :english "Thank you! Stay tuned for updates from COPA!"}})
 
 (defn make-sms [twiml msg]
   {:status  200
@@ -80,8 +80,8 @@
                                        (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
                                    ;; store lang
                                    (let [lang (cond
-                                                (= body "1") "English"
-                                                (= body "2") "Spanish"
+                                                (= body "1") "english"
+                                                (= body "2") "spanish"
                                                 :else "bail")]
                                      (if-not (= lang "bail")
                                        (-> (PUT url (assoc user-map :lang lang))
