@@ -80,8 +80,8 @@
                                        (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
                                    ;; store lang
                                    (let [lang (cond
-                                                (= body "1") "en-US"
-                                                (= body "2") "es-US"
+                                                (= body "1") "English"
+                                                (= body "2") "Spanish"
                                                 :else "bail")]
                                      (if-not (= lang "bail")
                                        (-> (PUT url (assoc user-map :lang lang))
