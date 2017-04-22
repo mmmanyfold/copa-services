@@ -26,6 +26,8 @@ serverless logs -f echo -t
 
 ### Remove all functions from aws account
 
+Remove Cloud Formation project then run:
+
 ```
 serverless remove
 ```
