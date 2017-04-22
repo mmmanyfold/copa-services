@@ -8,12 +8,8 @@ functions:
   email:
     cljs: copa-services.core/email
     events:
-      - schedule:
-          # Run at 6:00 pm (UTC) every Monday through Friday
-          description: 'Exports new members by email csv, flips users archive flag after'
-          rate: cron(0 18 ? * MON-FRI *)
-          enabled: true
-
+      - schedule: cron(0 14 ? * * *)
+      
   echo:
     cljs: copa-services.core/echo
     events:
