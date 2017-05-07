@@ -52,7 +52,7 @@
 ;; TODO: upcase ppl's name, grown up case
 ;; no yelling!
 
-(defgateway echo [{:keys [body] :as input} ctx]
+(defgateway sms [{:keys [body] :as input} ctx]
             (let [twilio (nodejs/require "twilio")
                   twiml (twilio.TwimlResponse.)
                   parsed-query-str (query-string.parse body)

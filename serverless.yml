@@ -10,11 +10,11 @@ functions:
     events:
       - schedule: cron(0 14 ? * * *)
       
-  echo:
-    cljs: copa-services.core/echo
+  sms:
+    cljs: copa-services.core/sms
     events:
       - http:
-          path: echo
+          path: sms
           method: post
 
 plugins:
