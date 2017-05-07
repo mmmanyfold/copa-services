@@ -46,12 +46,6 @@
   (let [opts {:url url :method "PUT" :json true}]
     (http (clj->js (assoc opts :body body)))))
 
-;; define a constant set of user properties
-(defonce USER-PROPS #{:name :lang :status})
-
-;; TODO: upcase ppl's name, grown up case
-;; no yelling!
-
 (defgateway sms [{:keys [body] :as input} ctx]
             (let [twilio (nodejs/require "twilio")
                   twiml (twilio.TwimlResponse.)
@@ -59,7 +53,8 @@
                   sms-body (aget parsed-query-str "Body")
                   sms-from (re-find #"\d+" (aget parsed-query-str "From"))
                   url (str copa-firebase-endpoint "/incoming/" sms-from ".json")
-                  body (clojure.string/upper-case sms-body)]
+                  body (clojure.string/upper-case sms-body)
+                  body (.trim body)]
 
               (-> (GET url)
                   (.then (fn [user]
@@ -72,20 +67,41 @@
                              ;; firebase has record
                              (let [user-map (js->clj user :keywordize-keys true)
                                    user-props ((comp set keys) user-map)]
-                               (when-not (= user-props USER-PROPS)
-                                 (if-let [lang (:lang user-map)]
-                                   ;; store name
-                                   (-> (PUT url (assoc user-map :name body))
-                                       (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
-                                   ;; store lang
-                                   (let [lang (cond
-                                                (= body "1") "english"
-                                                (= body "2") "spanish"
-                                                :else "bail")]
-                                     (if-not (= lang "bail")
-                                       (-> (PUT url (assoc user-map :lang lang))
+
+                               (cond
+                                 (= body "STOP")
+                                 (-> (PUT url (assoc user-map :status "REMOVE"))
+                                     (.then #(println "User removed.")))
+
+                                 (= body "START")
+                                 (let [user-map (assoc user-map :status "new")]
+                                   (if (not= user-props #{:name :lang :status})
+                                     (if-let [lang (:lang user-map)]
+                                       ;; ask name
+                                       (-> (PUT url user-map)
                                            (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
-                                       (make-sms twiml (:step-1 outgoing-messages)))))))))))))
+                                       ;; ask lang
+                                       (-> (PUT url user-map)
+                                           (.then #(make-sms twiml (:step-1 outgoing-messages)))))
+                                     (-> (PUT url user-map)
+                                         (.then #(println "User opted back in.")))))
+
+                                 :else
+                                 (when (and (not= (:status user-map) "REMOVE")
+                                            (not= user-props #{:name :lang :status}))
+                                   (if-let [lang (:lang user-map)]
+                                     ;; store name
+                                     (-> (PUT url (assoc user-map :name body))
+                                         (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
+                                     ;; store lang
+                                     (let [lang (cond
+                                                  (= body "1") "english"
+                                                  (= body "2") "spanish"
+                                                  :else :bail)]
+                                       (if-not (= lang :bail)
+                                         (-> (PUT url (assoc user-map :lang lang))
+                                             (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
+                                         (make-sms twiml (:step-1 outgoing-messages))))))))))))))
 
 (defn update-status [user-records filtered]
   (let [records-to-update (map :number filtered)
