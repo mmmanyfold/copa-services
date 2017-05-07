@@ -32,6 +32,6 @@ Remove Cloud Formation project then run:
 serverless remove
 ```
 
-## Twilio SMS Config
+### Twilio SMS Config
 
 1. Update POST endpoint on [twilio's sms app config](https://www.twilio.com/console/sms/services/MG7c87df1f861b9b9b5fdbb7404048376e)
