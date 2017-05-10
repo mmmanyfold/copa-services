@@ -54,7 +54,9 @@
                   sms-from (re-find #"\d+" (aget parsed-query-str "From"))
                   url (str copa-firebase-endpoint "/incoming/" sms-from ".json")
                   body (clojure.string/upper-case sms-body)
-                  body (.trim body)]
+                  body (-> body
+                           (.trim)
+                           (.replace (js/RegExp. "[^a-zA-Z0-9 ]" "g") ""))]
 
               (-> (GET url)
                   (.then (fn [user]
