@@ -24,7 +24,8 @@
 (defonce copa-firebase-endpoint "https://copa-services-storage.firebaseio.com")
 
 (defonce outgoing-messages
-         {:step-0 "Welcome to COPA's text alerts and news! To subscribe to receive important updates reply \"yes.\" Do not respond if you do not want to be added at this time.\n\nBienvenid@ a los alertos de texto de COPA! Para inscribirse a recibir información importante, responda \"yes.\" No necesita responder si no quiere recibir mensajes por el momento."
+         {:retry "Not a valid response. Please try again. \n\nRespuesta incorrecta, por favor vuelva a intentar."
+          :step-0 "Welcome to COPA's text alerts and news! To subscribe to receive important updates reply \"yes.\" Do not respond if you do not want to be added at this time.\n\nBienvenid@ a los alertos de texto de COPA! Para inscribirse a recibir información importante, responda \"yes.\" No necesita responder si no quiere recibir mensajes por el momento."
           :step-1 "Thank you for signing up to receive COPA’s text messages! To provide you the correct information, please provide your preferred language. Reply “1” for English or “2” for Spanish. \n\n¡Gracias por inscribirse a los mensajes de COPA! Para darle la información correcta, por favor designe su idioma preferido. Responda “1” para inglés o “2” para español."
           :step-2 {:spanish "¡Gracias! Su idioma preferido es español. Y para comunicarnos mejor, responda con su nombre completo."
                    :english "Thank you! Your preferred language is English. To best communicate with you, please respond with your full name."}
@@ -38,6 +39,8 @@
                 (.message msg)
                 (.toString))})
 
+
+
 (defn GET [url]
   (http (clj->js {:url url :method "GET" :json true})))
 
@@ -46,6 +49,8 @@
   (let [opts {:url url :method "PUT" :json true}]
     (http (clj->js (assoc opts :body body)))))
 
+(defn includes? [term ctx] (boolean (re-find (re-pattern term) ctx)))
+
 (defgateway sms [{:keys [body] :as input} ctx]
             (let [twilio (nodejs/require "twilio")
                   twiml (twilio.TwimlResponse.)
@@ -53,29 +58,26 @@
                   sms-body (aget parsed-query-str "Body")
                   sms-from (re-find #"\d+" (aget parsed-query-str "From"))
                   url (str copa-firebase-endpoint "/incoming/" sms-from ".json")
-                  body (clojure.string/upper-case sms-body)
-                  body (-> body
-                           (.trim)
-                           (.replace (js/RegExp. "[^a-zA-Z0-9 ]" "g") ""))]
+                  body (clojure.string/upper-case sms-body)]
 
               (-> (GET url)
                   (.then (fn [user]
                            (if (nil? user)
                              ;; firabase has no record
-                             (if (= body "YES")
+                             (if (includes? "YES" body)
                                (-> (PUT url {:status "new"})
                                    (.then #(make-sms twiml (:step-1 outgoing-messages))))
-                               (make-sms twiml (:step-0 outgoing-messages)))
+                               (make-sms twiml (:retry outgoing-messages)))
                              ;; firebase has record
                              (let [user-map (js->clj user :keywordize-keys true)
                                    user-props ((comp set keys) user-map)]
 
                                (cond
-                                 (= body "STOP")
+                                 (includes? "STOP" body)
                                  (-> (PUT url (assoc user-map :status "REMOVE"))
                                      (.then #(println "User removed.")))
 
-                                 (= body "START")
+                                 (includes? "START" body)
                                  (let [user-map (assoc user-map :status "new")]
                                    (if (not= user-props #{:name :lang :status})
                                      (if-let [lang (:lang user-map)]
@@ -97,13 +99,13 @@
                                          (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
                                      ;; store lang
                                      (let [lang (cond
-                                                  (= body "1") "english"
-                                                  (= body "2") "spanish"
+                                                  (and (includes? "1" body) (nil? (re-find #"2" body))) "english"
+                                                  (and (includes? "2" body) (nil? (re-find #"1" body))) "spanish"
                                                   :else :bail)]
                                        (if-not (= lang :bail)
                                          (-> (PUT url (assoc user-map :lang lang))
                                              (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
-                                         (make-sms twiml (:step-1 outgoing-messages))))))))))))))
+                                         (make-sms twiml (:retry outgoing-messages))))))))))))))
 
 (defn update-status [user-records filtered]
   (let [records-to-update (map :number filtered)
