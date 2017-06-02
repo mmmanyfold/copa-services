@@ -39,8 +39,6 @@
                 (.message msg)
                 (.toString))})
 
-
-
 (defn GET [url]
   (http (clj->js {:url url :method "GET" :json true})))
 
