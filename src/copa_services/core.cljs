@@ -49,6 +49,9 @@
 
 (defn includes? [term ctx] (boolean (re-find (re-pattern term) ctx)))
 
+                ;; TODO: write a general function that checks whether all fields have been submitted
+;; other (~ exit condition for every branch of logic)
+
 (defgateway sms [{:keys [body] :as input} ctx]
             (let [twilio (nodejs/require "twilio")
                   twiml (twilio.TwimlResponse.)
@@ -63,6 +66,8 @@
                            (if (nil? user)
                              ;; firabase has no record
                              (if (includes? "YES" body)
+                               ;; TODO: start all records as pending
+                               ;; only set status to new if all fields have been received
                                (-> (PUT url {:status "new"})
                                    (.then #(make-sms twiml (:step-1 outgoing-messages))))
                                (make-sms twiml (:retry outgoing-messages)))
@@ -76,6 +81,9 @@
                                      (.then #(println "User removed.")))
 
                                  (includes? "START" body)
+
+                                 ;; TODO: change to pending
+
                                  (let [user-map (assoc user-map :status "new")]
                                    (if (not= user-props #{:name :lang :status})
                                      (if-let [lang (:lang user-map)]
@@ -90,6 +98,7 @@
 
                                  :else
                                  (when (and (not= (:status user-map) "REMOVE")
+                                            ;; TODO: add :timestamp to record model (new Date in millis epoc)
                                             (not= user-props #{:name :lang :status}))
                                    (if-let [lang (:lang user-map)]
                                      ;; store name
@@ -105,22 +114,25 @@
                                              (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
                                          (make-sms twiml (:retry outgoing-messages))))))))))))))
 
-(defn update-status [user-records filtered]
+(defn update-status [user-records filtered & [status]]
   (let [records-to-update (map :number filtered)
         url (str copa-firebase-endpoint "/incoming.json")
         clj->users (js->clj user-records :keywordize-keys true)
         final-records-update
         (->> (map (fn [[k v]]
                     (if (some #(= k %) records-to-update)
-                      (hash-map k (update v :status (constantly "exported")))
+                      (hash-map k (update v :status (constantly (or status "exported"))))
                       (hash-map k v))) clj->users)
              (into {}))]
     (-> (PUT url final-records-update)
         (.then #(println "User records updated.")))))
 
+;; TODO: use moment to compute 1 week duration value in millies
+;; and use this value to check if its longer than a week
 
 (defgateway email [{:keys [body] :as input} ctx]
             (let [fields [:status :name :lang :number]
+                  today (.now js/Date)
                   url (str copa-firebase-endpoint "/incoming.json")
                   mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
                                                 :domain DOMAIN}))]
@@ -132,6 +144,10 @@
                             k (keys users)
                             v (vals users)
                             flat-users (map #(assoc %1 :number %2) v k)
+
+                            ;; TODO: mail function checks if time > 1 week if so, set status to new
+                            ;; TODO: change this to filter status == new
+
                             filter-for-export (filter #(not= (% :status) "exported") flat-users)]
                         (let [csv (json2csv (clj->js {:data   filter-for-export
                                                       :fields fields}))
