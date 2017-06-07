@@ -24,7 +24,7 @@
 (defonce copa-firebase-endpoint "https://copa-services-storage.firebaseio.com")
 
 (defonce outgoing-messages
-         {:retry "Not a valid response. Please try again. \n\nRespuesta incorrecta, por favor vuelva a intentar."
+         {:retry  "Not a valid response. Please try again. \n\nRespuesta incorrecta, por favor vuelva a intentar."
           :step-0 "Welcome to COPA's text alerts and news! To subscribe to receive important updates reply \"yes.\" Do not respond if you do not want to be added at this time.\n\nBienvenid@ a los alertos de texto de COPA! Para inscribirse a recibir información importante, responda \"yes.\" No necesita responder si no quiere recibir mensajes por el momento."
           :step-1 "Thank you for signing up to receive COPA’s text messages! To provide you the correct information, please provide your preferred language. Reply “1” for English or “2” for Spanish. \n\n¡Gracias por inscribirse a los mensajes de COPA! Para darle la información correcta, por favor designe su idioma preferido. Responda “1” para inglés o “2” para español."
           :step-2 {:spanish "¡Gracias! Su idioma preferido es español. Y para comunicarnos mejor, responda con su nombre completo."
@@ -49,12 +49,10 @@
 
 (defn includes? [term ctx] (boolean (re-find (re-pattern term) ctx)))
 
-                ;; TODO: write a general function that checks whether all fields have been submitted
-;; other (~ exit condition for every branch of logic)
-
 (defgateway sms [{:keys [body] :as input} ctx]
             (let [twilio (nodejs/require "twilio")
                   twiml (twilio.TwimlResponse.)
+                  now (.now js/Date)
                   parsed-query-str (query-string.parse body)
                   sms-body (aget parsed-query-str "Body")
                   sms-from (re-find #"\d+" (aget parsed-query-str "From"))
@@ -64,13 +62,13 @@
               (-> (GET url)
                   (.then (fn [user]
                            (if (nil? user)
+
                              ;; firabase has no record
                              (if (includes? "YES" body)
-                               ;; TODO: start all records as pending
-                               ;; only set status to new if all fields have been received
-                               (-> (PUT url {:status "new"})
+                               (-> (PUT url {:status "incomplete" :timestamp now})
                                    (.then #(make-sms twiml (:step-1 outgoing-messages))))
                                (make-sms twiml (:retry outgoing-messages)))
+
                              ;; firebase has record
                              (let [user-map (js->clj user :keywordize-keys true)
                                    user-props ((comp set keys) user-map)]
@@ -81,9 +79,6 @@
                                      (.then #(println "User removed.")))
 
                                  (includes? "START" body)
-
-                                 ;; TODO: change to pending
-
                                  (let [user-map (assoc user-map :status "new")]
                                    (if (not= user-props #{:name :lang :status})
                                      (if-let [lang (:lang user-map)]
@@ -98,11 +93,10 @@
 
                                  :else
                                  (when (and (not= (:status user-map) "REMOVE")
-                                            ;; TODO: add :timestamp to record model (new Date in millis epoc)
                                             (not= user-props #{:name :lang :status}))
                                    (if-let [lang (:lang user-map)]
                                      ;; store name
-                                     (-> (PUT url (assoc user-map :name body))
+                                     (-> (PUT url (assoc user-map :name body :status "complete"))
                                          (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
                                      ;; store lang
                                      (let [lang (cond
@@ -114,25 +108,30 @@
                                              (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
                                          (make-sms twiml (:retry outgoing-messages))))))))))))))
 
-(defn update-status [user-records filtered & [status]]
+(defn update-status [user-records filtered]
   (let [records-to-update (map :number filtered)
         url (str copa-firebase-endpoint "/incoming.json")
         clj->users (js->clj user-records :keywordize-keys true)
         final-records-update
         (->> (map (fn [[k v]]
                     (if (some #(= k %) records-to-update)
-                      (hash-map k (update v :status (constantly (or status "exported"))))
+                      (hash-map k (update v :status (constantly "exported")))
                       (hash-map k v))) clj->users)
              (into {}))]
     (-> (PUT url final-records-update)
         (.then #(println "User records updated.")))))
 
-;; TODO: use moment to compute 1 week duration value in millies
-;; and use this value to check if its longer than a week
+(defn older-than-duration?
+  [records now duration]
+  (filter (fn [{:keys [timestamp]}]
+            (let [diff (- now timestamp)]
+              (> diff duration)))
+    records))
 
 (defgateway email [{:keys [body] :as input} ctx]
             (let [fields [:status :name :lang :number]
                   today (.now js/Date)
+                  one-week 604800000 ;; in millis
                   url (str copa-firebase-endpoint "/incoming.json")
                   mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
                                                 :domain DOMAIN}))]
@@ -145,16 +144,17 @@
                             v (vals users)
                             flat-users (map #(assoc %1 :number %2) v k)
 
-                            ;; TODO: mail function checks if time > 1 week if so, set status to new
-                            ;; TODO: change this to filter status == new
+                            incomplete-records (filter #(= (% :status) "incomplete") flat-users)
+                            complete-records (filter #(= (% :status) "complete") flat-users)
+                            old-incomplete-records (older-than-duration? incomplete-records today one-week)
+                            all-records (concat complete-records old-incomplete-records)]
 
-                            filter-for-export (filter #(not= (% :status) "exported") flat-users)]
-                        (let [csv (json2csv (clj->js {:data   filter-for-export
+                        (let [csv (json2csv (clj->js {:data   all-records
                                                       :fields fields}))
                               attch (.-Attachment mailgun)
                               attachment (attch. (clj->js {:data     (js/Buffer. csv)
                                                            :filename "members.csv"}))
-                              new-member-count (count filter-for-export)
+                              new-member-count (count all-records)
                               data {:from       EMAIL_FROM
                                     :to         EMAIL_TO
                                     :subject    (str "Hello, " new-member-count " new members today.")
@@ -166,7 +166,7 @@
                                 (.send (clj->js data)
                                        (fn [err body]
                                          (when-not err
-                                           (update-status json-user-records filter-for-export)))))
+                                           (update-status json-user-records all-records)))))
                             (-> mailgun
                                 (.messages)
                                 (.send (clj->js (dissoc data :attachment))
