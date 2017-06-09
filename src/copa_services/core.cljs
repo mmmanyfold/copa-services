@@ -1,6 +1,7 @@
 (ns copa-services.core
   (:require [cljs-lambda.macros :refer-macros [defgateway]]
             [cljs.core.async :as async]
+            [copa-services.outgoing :as outgoing]
             [cljs.nodejs :as nodejs]))
 
 (def query-string (nodejs/require "querystring"))
@@ -23,21 +24,14 @@
 
 (defonce copa-firebase-endpoint "https://copa-services-storage.firebaseio.com")
 
-(defonce outgoing-messages
-         {:retry  "Not a valid response. Please try again. \n\nRespuesta incorrecta, por favor vuelva a intentar."
-          :step-0 "Welcome to COPA's text alerts and news! To subscribe to receive important updates reply \"yes.\" Do not respond if you do not want to be added at this time.\n\nBienvenid@ a los alertos de texto de COPA! Para inscribirse a recibir información importante, responda \"yes.\" No necesita responder si no quiere recibir mensajes por el momento."
-          :step-1 "Thank you for signing up to receive COPA’s text messages! To provide you the correct information, please provide your preferred language. Reply “1” for English or “2” for Spanish. \n\n¡Gracias por inscribirse a los mensajes de COPA! Para darle la información correcta, por favor designe su idioma preferido. Responda “1” para inglés o “2” para español."
-          :step-2 {:spanish "¡Gracias! Su idioma preferido es español. Y para comunicarnos mejor, responda con su nombre completo."
-                   :english "Thank you! Your preferred language is English. To best communicate with you, please respond with your full name."}
-          :step-3 {:spanish "¡Gracias! ¡Este pendiente de la información de COPA!"
-                   :english "Thank you! Stay tuned for updates from COPA!"}})
-
 (defn make-sms [twiml msg]
   {:status  200
    :headers {:content-type "text/xml"}
    :body    (-> twiml
                 (.message msg)
                 (.toString))})
+
+(def FINAL-USER-PROPS #{:name :lang :status :timestamp})
 
 (defn GET [url]
   (http (clj->js {:url url :method "GET" :json true})))
@@ -66,8 +60,8 @@
                              ;; firabase has no record
                              (if (includes? "YES" body)
                                (-> (PUT url {:status "incomplete" :timestamp now})
-                                   (.then #(make-sms twiml (:step-1 outgoing-messages))))
-                               (make-sms twiml (:retry outgoing-messages)))
+                                   (.then #(make-sms twiml (:step-1 outgoing/messages))))
+                               (make-sms twiml (:retry outgoing/messages)))
 
                              ;; firebase has record
                              (let [user-map (js->clj user :keywordize-keys true)
@@ -84,10 +78,11 @@
                                      (if-let [lang (:lang user-map)]
                                        ;; ask name
                                        (-> (PUT url user-map)
-                                           (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
+                                           (.then #(make-sms twiml (get-in outgoing/messages
+                                                                           [:step-2 (keyword lang)]))))
                                        ;; ask lang
                                        (-> (PUT url user-map)
-                                           (.then #(make-sms twiml (:step-1 outgoing-messages)))))
+                                           (.then #(make-sms twiml (:step-1 outgoing/messages)))))
                                      (-> (PUT url user-map)
                                          (.then #(println "User opted back in.")))))
 
@@ -96,8 +91,11 @@
                                             (not= user-props #{:name :lang :status}))
                                    (if-let [lang (:lang user-map)]
                                      ;; store name
-                                     (-> (PUT url (assoc user-map :name body :status "complete"))
-                                         (.then #(make-sms twiml (get-in outgoing-messages [:step-3 (keyword lang)]))))
+                                     ;; guard against overwriting last user-prop :name
+                                     (when-not (= user-props FINAL-USER-PROPS)
+                                       (-> (PUT url (assoc user-map :name body :status "complete"))
+                                           (.then #(make-sms twiml (get-in outgoing/messages
+                                                                           [:step-3 (keyword (:lang user-map))])))))
                                      ;; store lang
                                      (let [lang (cond
                                                   (and (includes? "1" body) (nil? (re-find #"2" body))) "english"
@@ -105,8 +103,9 @@
                                                   :else :bail)]
                                        (if-not (= lang :bail)
                                          (-> (PUT url (assoc user-map :lang lang))
-                                             (.then #(make-sms twiml (get-in outgoing-messages [:step-2 (keyword lang)]))))
-                                         (make-sms twiml (:retry outgoing-messages))))))))))))))
+                                             (.then #(make-sms twiml (get-in outgoing/messages
+                                                                             [:step-2 (keyword lang)]))))
+                                         (make-sms twiml (:retry outgoing/messages))))))))))))))
 
 (defn update-status [user-records filtered]
   (let [records-to-update (map :number filtered)
@@ -126,12 +125,13 @@
   (filter (fn [{:keys [timestamp]}]
             (let [diff (- now timestamp)]
               (> diff duration)))
-    records))
+          records))
 
 (defgateway email [{:keys [body] :as input} ctx]
             (let [fields [:status :name :lang :number]
                   today (.now js/Date)
-                  one-week 604800000 ;; in millis
+                  ;; in millis
+                  one-week 604800000
                   url (str copa-firebase-endpoint "/incoming.json")
                   mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
                                                 :domain DOMAIN}))]
