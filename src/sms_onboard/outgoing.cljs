@@ -1,4 +1,4 @@
-(ns copa-services.outgoing)
+(ns sms-onboard.outgoing)
 
 (defonce messages
   {:retry  "Not a valid response. Please try again. \n\nRespuesta incorrecta, por favor vuelva a intentar."

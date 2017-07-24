@@ -1,4 +1,4 @@
-service: copa-services
+service: sms-onboard
 
 provider:
   name: aws
@@ -6,12 +6,12 @@ provider:
 
 functions:
   email:
-    cljs: copa-services.core/email
+    cljs: sms-onboard.core/email
     events:
       - schedule: cron(0 14 ? * * *)
       
   sms:
-    cljs: copa-services.core/sms
+    cljs: sms-onboard.core/sms
     events:
       - http:
           path: sms
