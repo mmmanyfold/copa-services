@@ -1,6 +1,6 @@
 # SMS_ONBOARD
 
-## AWS λ service for onboarding new members via sms. Integrates with PowerBase DB.  
+## AWS λ service for on-boarding new members via sms. Integrates with PowerBase DB.  
 
 ### Deploy
 
@@ -44,3 +44,18 @@ $ serverless remove
 ```sh
 $ lein doo node sms-onboard-test
 ```
+
+### Environment Variables
+
+- ORG_NAME=
+- FIREBASE_ENDPOINT=
+- DOMAIN=
+- MAILGUN_KEY=
+- EMAIL_FROM=
+- EMAIL_TO=
+- EXPORT_FREQUENCY=
+
+for serverless deployment
+
+- AWS_ACCESS_KEY_ID=
+- AWS_SECRET_ACCESS_KEY=
