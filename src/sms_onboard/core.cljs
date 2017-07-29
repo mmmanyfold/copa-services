@@ -2,14 +2,8 @@
   (:require [cljs-lambda.macros :refer-macros [defgateway]]
             [cljs.core.async :as async]
             [sms-onboard.outgoing :as outgoing]
-            [cljs.nodejs :as nodejs]))
-
-(defn get-env
-  "Retrieve environment variable from process.env"
-  [var]
-  (-> nodejs/process
-      .-env
-      (aget var)))
+            [cljs.nodejs :as nodejs]
+            [sms-onboard.helpers :refer [get-env]]))
 
 (def query-string (nodejs/require "querystring"))
 
@@ -30,6 +24,8 @@
 (def FIREBASE_ENDPOINT (get-env "FIREBASE_ENDPOINT"))
 
 (def EXPORT_FREQUENCY (get-env "EXPORT_FREQUENCY"))
+
+(def ORG_NAME (.toLowerCase (get-env "ORG_NAME")))
 
 (defn make-sms [twiml msg]
   {:status  200
@@ -57,7 +53,7 @@
                   parsed-query-str (query-string.parse body)
                   sms-body (aget parsed-query-str "Body")
                   sms-from (re-find #"\d+" (aget parsed-query-str "From"))
-                  url (str FIREBASE_ENDPOINT sms-from ".json")
+                  url (str FIREBASE_ENDPOINT "/" ORG_NAME "/" sms-from ".json")
                   body (clojure.string/upper-case sms-body)]
 
               (-> (GET url)
@@ -116,7 +112,7 @@
 
 (defn update-status [user-records filtered]
   (let [records-to-update (map :number filtered)
-        url FIREBASE_ENDPOINT
+        url (str FIREBASE_ENDPOINT "/" ORG_NAME ".json")
         clj->users (js->clj user-records :keywordize-keys true)
         final-records-update
         (->> (map (fn [[k v]]
@@ -139,7 +135,7 @@
                   today (.now js/Date)
                   ;; in millis
                   one-week 604800000
-                  url FIREBASE_ENDPOINT
+                  url (str FIREBASE_ENDPOINT "/" ORG_NAME ".json")
                   mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
                                                 :domain DOMAIN}))]
               (-> (GET url)
