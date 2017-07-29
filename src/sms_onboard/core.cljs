@@ -1,7 +1,7 @@
 (ns sms-onboard.core
   (:require [cljs-lambda.macros :refer-macros [defgateway]]
             [cljs.core.async :as async]
-            [copa-services.outgoing :as outgoing]
+            [sms-onboard.outgoing :as outgoing]
             [cljs.nodejs :as nodejs]))
 
 (defn get-env
@@ -29,6 +29,8 @@
 
 (def FIREBASE_ENDPOINT (get-env "FIREBASE_ENDPOINT"))
 
+(def EXPORT_FREQUENCY (get-env "EXPORT_FREQUENCY"))
+
 (defn make-sms [twiml msg]
   {:status  200
    :headers {:content-type "text/xml"}
@@ -55,7 +57,7 @@
                   parsed-query-str (query-string.parse body)
                   sms-body (aget parsed-query-str "Body")
                   sms-from (re-find #"\d+" (aget parsed-query-str "From"))
-                  url (str FIREBASE_ENDPOINT "/incoming/" sms-from ".json")
+                  url (str FIREBASE_ENDPOINT sms-from ".json")
                   body (clojure.string/upper-case sms-body)]
 
               (-> (GET url)
@@ -114,7 +116,7 @@
 
 (defn update-status [user-records filtered]
   (let [records-to-update (map :number filtered)
-        url (str FIREBASE_ENDPOINT "/incoming.json")
+        url FIREBASE_ENDPOINT
         clj->users (js->clj user-records :keywordize-keys true)
         final-records-update
         (->> (map (fn [[k v]]
@@ -137,7 +139,7 @@
                   today (.now js/Date)
                   ;; in millis
                   one-week 604800000
-                  url (str FIREBASE_ENDPOINT "/incoming.json")
+                  url FIREBASE_ENDPOINT
                   mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
                                                 :domain DOMAIN}))]
               (-> (GET url)
@@ -163,7 +165,7 @@
                               data {:from       EMAIL_FROM
                                     :to         EMAIL_TO
                                     :subject    (str "Hello, " new-member-count " new members today.")
-                                    :text       "Exported: daily."
+                                    :text       (str "Exported: " EXPORT_FREQUENCY ".")
                                     :attachment attachment}]
                           (if (>= new-member-count 1)
                             (-> mailgun
