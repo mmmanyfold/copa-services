@@ -45,17 +45,22 @@ $ serverless remove
 $ lein doo node sms-onboard-test
 ```
 
-### Environment Variables
+### EMAIL FN Environment Variables
 
-- ORG_NAME=
-- FIREBASE_ENDPOINT=
 - DOMAIN=
 - MAILGUN_KEY=
 - EMAIL_FROM=
 - EMAIL_TO=
 - EXPORT_FREQUENCY=
+- ORG_NAME=
+- FIREBASE_ENDPOINT=
 
-for serverless deployment
+### SMS FN Environment Variables
+
+- ORG_NAME=
+- FIREBASE_ENDPOINT=
+
+### AWS Environment Variables For Serverless Deployment
 
 - AWS_ACCESS_KEY_ID=
 - AWS_SECRET_ACCESS_KEY=

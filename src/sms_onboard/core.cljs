@@ -3,6 +3,7 @@
             [cljs.core.async :as async]
             [sms-onboard.outgoing :as outgoing]
             [cljs.nodejs :as nodejs]
+            [clojure.string :as string :refer [lower-case]]
             [sms-onboard.helpers :refer [get-env]]))
 
 (def query-string (nodejs/require "querystring"))
@@ -25,7 +26,7 @@
 
 (def EXPORT_FREQUENCY (get-env "EXPORT_FREQUENCY"))
 
-(def ORG_NAME (.toLowerCase (get-env "ORG_NAME")))
+(def ORG_NAME (lower-case (get-env "ORG_NAME")))
 
 (defn make-sms [twiml msg]
   {:status  200
