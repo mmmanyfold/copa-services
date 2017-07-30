@@ -17,4 +17,4 @@
 
 (deftest formatting-strings
   (testing "test formatting strings using format fn")
-    (is (= (format "Welcome to %s") "COPA") "Welcome to COPA"))
+    (is (= (format "Welcome to %s" "COPA")) "Welcome to COPA"))
