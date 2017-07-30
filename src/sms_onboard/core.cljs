@@ -1,12 +1,12 @@
-(ns copa-services.core
+(ns sms-onboard.core
   (:require [cljs-lambda.macros :refer-macros [defgateway]]
             [cljs.core.async :as async]
-            [copa-services.outgoing :as outgoing]
-            [cljs.nodejs :as nodejs]))
+            [sms-onboard.outgoing :as outgoing]
+            [cljs.nodejs :as nodejs]
+            [clojure.string :as string :refer [lower-case]]
+            [sms-onboard.helpers :refer [get-env format]]))
 
 (def query-string (nodejs/require "querystring"))
-
-(def buffer (nodejs/require "buffer"))
 
 (def http (nodejs/require "request-promise"))
 
@@ -14,15 +14,19 @@
 
 (def mailgun-js (nodejs/require "mailgun-js"))
 
-(def MAILGUN_KEY (-> nodejs/process .-env .-MAILGUN_KEY))
+(def MAILGUN_KEY (get-env "MAILGUN_KEY"))
 
-(def DOMAIN (-> nodejs/process .-env .-DOMAIN))
+(def DOMAIN (get-env "DOMAIN"))
 
-(def EMAIL_FROM (-> nodejs/process .-env .-EMAIL_FROM))
+(def EMAIL_FROM (get-env "EMAIL_FROM"))
 
-(def EMAIL_TO (-> nodejs/process .-env .-EMAIL_TO))
+(def EMAIL_TO (get-env "EMAIL_TO"))
 
-(defonce copa-firebase-endpoint "https://copa-services-storage.firebaseio.com")
+(def FIREBASE_ENDPOINT (get-env "FIREBASE_ENDPOINT"))
+
+(def EXPORT_FREQUENCY (get-env "EXPORT_FREQUENCY"))
+
+(def ORG_NAME (lower-case (get-env "ORG_NAME")))
 
 (defn make-sms [twiml msg]
   {:status  200
@@ -50,7 +54,7 @@
                   parsed-query-str (query-string.parse body)
                   sms-body (aget parsed-query-str "Body")
                   sms-from (re-find #"\d+" (aget parsed-query-str "From"))
-                  url (str copa-firebase-endpoint "/incoming/" sms-from ".json")
+                  url (str FIREBASE_ENDPOINT "/" ORG_NAME "/" sms-from ".json")
                   body (clojure.string/upper-case sms-body)]
 
               (-> (GET url)
@@ -109,7 +113,7 @@
 
 (defn update-status [user-records filtered]
   (let [records-to-update (map :number filtered)
-        url (str copa-firebase-endpoint "/incoming.json")
+        url (str FIREBASE_ENDPOINT "/" ORG_NAME ".json")
         clj->users (js->clj user-records :keywordize-keys true)
         final-records-update
         (->> (map (fn [[k v]]
@@ -132,7 +136,7 @@
                   today (.now js/Date)
                   ;; in millis
                   one-week 604800000
-                  url (str copa-firebase-endpoint "/incoming.json")
+                  url (str FIREBASE_ENDPOINT "/" ORG_NAME ".json")
                   mailgun (mailgun-js (clj->js {:apiKey MAILGUN_KEY
                                                 :domain DOMAIN}))]
               (-> (GET url)
@@ -157,8 +161,8 @@
                               new-member-count (count all-records)
                               data {:from       EMAIL_FROM
                                     :to         EMAIL_TO
-                                    :subject    (str "Hello, " new-member-count " new members today.")
-                                    :text       "Exported: daily."
+                                    :subject    (format "Hello %s, %s new members today." ORG_NAME new-member-count)
+                                    :text       (str "Exported: " EXPORT_FREQUENCY ".")
                                     :attachment attachment}]
                           (if (>= new-member-count 1)
                             (-> mailgun
