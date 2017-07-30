@@ -4,7 +4,7 @@
             [sms-onboard.outgoing :as outgoing]
             [cljs.nodejs :as nodejs]
             [clojure.string :as string :refer [lower-case]]
-            [sms-onboard.helpers :refer [get-env]]))
+            [sms-onboard.helpers :refer [get-env format]]))
 
 (def query-string (nodejs/require "querystring"))
 
@@ -161,7 +161,7 @@
                               new-member-count (count all-records)
                               data {:from       EMAIL_FROM
                                     :to         EMAIL_TO
-                                    :subject    (str "Hello, " new-member-count " new members today.")
+                                    :subject    (format "Hello %s, %s new members today." ORG_NAME new-member-count)
                                     :text       (str "Exported: " EXPORT_FREQUENCY ".")
                                     :attachment attachment}]
                           (if (>= new-member-count 1)

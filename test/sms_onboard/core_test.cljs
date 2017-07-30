@@ -24,4 +24,8 @@
 
     (testing "multiple interpolations of the same word"
       (is (= (format "Welcome to %s. Beinvenido a %s" org-name org-name)
-             "Welcome to COPA. Beinvenido a COPA")))))
+             "Welcome to COPA. Beinvenido a COPA")))
+
+    (testing "can interpolate numbers"
+      (is (= (format "Contando %s %s %s" 1 2 3)
+             "Contando 1 2 3")))))
