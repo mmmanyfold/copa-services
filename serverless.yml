@@ -8,7 +8,7 @@ functions:
   email:
     cljs: sms-onboard.core/email
     events:
-      - schedule: cron(0 14 ? * * *)
+      - schedule: cron(0 15 ? * 6 *)
       
   sms:
     cljs: sms-onboard.core/sms
