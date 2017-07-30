@@ -1,6 +1,6 @@
 # SMS_ONBOARD
 
-## AWS λ service for on-boarding new members via sms. Integrates with PowerBase DB.  
+## AWS λ service for on-boarding new members via Twilio SMS.
 
 ### Deploy
 
