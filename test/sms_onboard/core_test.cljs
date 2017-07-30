@@ -16,5 +16,12 @@
     (is (= (get-env "ORG_NAME") "COPA"))))
 
 (deftest formatting-strings
-  (testing "test formatting strings using format fn")
-    (is (= (format "Welcome to %s" "COPA")) "Welcome to COPA"))
+
+  (let [org-name "COPA"]
+
+    (testing "test formatting strings using format fn"
+      (is (= (format "Welcome to %s" org-name)) "Welcome to COPA"))
+
+    (testing "multiple interpolations of the same word"
+      (is (= (format "Welcome to %s. Beinvenido a %s" org-name org-name)
+             "Welcome to COPA. Beinvenido a COPA")))))
